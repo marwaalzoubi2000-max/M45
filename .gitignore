@@ -1,0 +1,11 @@
+*.pt
+*.onnx
+*.apk
+*.aab
+*.jks
+*.keystore
+.gradle/
+**/build/
+local.properties
+__pycache__/
+.venv/
