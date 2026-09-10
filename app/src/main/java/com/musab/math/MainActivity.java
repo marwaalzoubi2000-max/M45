@@ -83,9 +83,9 @@ public final class MainActivity extends Activity {
     private void controls(){load.setEnabled(!busy);reset.setEnabled(!busy);clear.setEnabled(!busy);question.setEnabled(!busy);solve.setEnabled(ready&&(!busy||solving));solve.setText(solving?"إيقاف":"حل");historyButton.setEnabled(!busy);copy.setEnabled(!solving);share.setEnabled(!solving);progress.setVisibility(busy?View.VISIBLE:View.GONE);}
     private void openSaved(){busy=true;controls();status.setText("جارٍ تحميل النموذج المحفوظ…");worker.execute(()->{
         try{engine=openModel(modelFile);ui(()->{ready=true;busy=false;status.setText(getPreferences(0).getString("modelName","النموذج")+" • جاهز دون إنترنت");controls();});}
-        catch(Exception e){failure(e);}
+        catch(Exception|OutOfMemoryError e){failure(e);}
     });}
-    private void failure(Exception e){ui(()->{busy=false;solving=false;status.setText("تعذّر التنفيذ: "+e.getMessage());controls();});}
+    private void failure(Throwable e){ui(()->{busy=false;solving=false;status.setText("تعذّر التنفيذ: "+(e instanceof OutOfMemoryError?"الذاكرة غير كافية؛ أغلق التطبيقات الأخرى وحاول مجددًا":e.getMessage()));controls();});}
     @Override protected void onActivityResult(int request,int result,Intent data){super.onActivityResult(request,result,data);
         if(request!=7||result!=RESULT_OK||data==null||data.getData()==null)return;
         Uri uri=data.getData();selectedName=displayName(uri);busy=true;progress.setProgress(0);controls();status.setText("جارٍ فحص وتحميل النموذج…");
@@ -103,13 +103,13 @@ public final class MainActivity extends Activity {
                 MathEngine previous=engine;engine=candidate;candidate=null;
                 if(previous!=null)try{previous.close();}catch(Exception ignored){}
                 ui(()->{ready=true;busy=false;answer.setText("سيظهر الجواب هنا");getPreferences(0).edit().putString("modelName",selectedName).apply();status.setText(selectedName+" • جاهز للحل");controls();});
-            }catch(Exception e){if(candidate!=null)try{candidate.close();}catch(Exception ignored){}failure(e);}
+            }catch(Exception|OutOfMemoryError e){if(candidate!=null)try{candidate.close();}catch(Exception ignored){}failure(e);}
             finally{temp.delete();}
         });
     }
     private void startSolve(){String q=question.getText().toString();try{Tokenizer.prompt(q);}catch(Exception e){status.setText(e.getMessage());return;}
         cancel.set(false);busy=true;solving=true;progress.setProgress(0);controls();status.setText("جارٍ الحل على الجهاز…");long started=SystemClock.elapsedRealtime();
-        worker.execute(()->{try{String result=engine.solve(q,cancel,(partial,tokens)->ui(()->{answer.setText(partial);progress.setProgress(tokens*100/64);}));ui(()->{answer.setText(result);status.setText("اكتمل الحل خلال "+((SystemClock.elapsedRealtime()-started)/1000.0)+" ثانية");busy=false;solving=false;saveHistory(q,result);controls();});}catch(Exception e){failure(e);}});
+        worker.execute(()->{try{String result=engine.solve(q,cancel,(partial,tokens)->ui(()->{answer.setText(partial);progress.setProgress(tokens*100/64);}));ui(()->{answer.setText(result);status.setText("اكتمل الحل خلال "+((SystemClock.elapsedRealtime()-started)/1000.0)+" ثانية");busy=false;solving=false;saveHistory(q,result);controls();});}catch(Exception|OutOfMemoryError e){failure(e);}});
     }
     private void resetModel(){busy=true;controls();worker.execute(()->{try{if(engine!=null){engine.close();engine=null;}
         Files.deleteIfExists(modelFile.toPath());ui(()->{busy=false;ready=false;getPreferences(0).edit().clear().apply();question.setText("");answer.setText("سيظهر الجواب هنا");status.setText("حمّل ملف النموذج لبدء الحل");controls();});

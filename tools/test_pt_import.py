@@ -37,3 +37,13 @@ with zipfile.ZipFile(root/'fp32-p2.pt') as z, zipfile.ZipFile(root/'truncated.pt
 with zipfile.ZipFile(root/'unknown-type.pt','w') as z:
     z.writestr('archive/data.pkl',b'\x80\x02cunsupported\nUnknownType\n.')
 print('PT_FIXTURES_READY')
+
+# Production-size manifest + direct FP32 checkpoint, no training or user weights.
+full=root/'full';full.mkdir(exist_ok=True)
+torch.manual_seed(4512)
+production=MathCore().eval();build(production,full)
+torch.save({'model':{k:v.clone() for k,v in production.state_dict().items()},'metrics':None},full/'best.pt')
+ids=torch.tensor([[1]+[3+(i*17)%256 for i in range(22)]])
+with torch.inference_mode():values=production(ids)[0,-1].numpy()
+(full/'reference.txt').write_text('\n'.join(map(str,values.tolist())))
+print('PRODUCTION_PT_FIXTURE_READY')

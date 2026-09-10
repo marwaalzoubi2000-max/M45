@@ -1,5 +1,6 @@
 """Build architecture-only ONNX assets. User weights are graph inputs, never bundled."""
 import argparse
+import copy
 from pathlib import Path
 import numpy as np
 import torch
@@ -11,7 +12,13 @@ from musab_data import encode_prompt
 
 def build(model, out):
     out=Path(out);out.mkdir(parents=True,exist_ok=True)
-    wrapper=LastLogits(model.float().eval())
+    wrapper=LastLogits(copy.deepcopy(model).float().eval())
+    # ONNX's exporter coalesces equal initial tensors even with export_params=False.
+    # Distinguish template-only norm weights so independent learned norms stay inputs.
+    with torch.no_grad():
+        for index, parameter in enumerate(wrapper.parameters()):
+            if parameter.ndim == 1:
+                parameter.copy_(torch.arange(parameter.numel(),dtype=parameter.dtype).reshape(parameter.shape)*0.0001 + 1.0 + index*0.001)
     path=out/'pt_graph.onnx'
     # No parameter folding: preserve named original weights for direct .pt binding.
     torch.onnx.export(wrapper,(torch.tensor([encode_prompt('1+1')]),),str(path),
@@ -31,7 +38,7 @@ def build(model, out):
             keep.append(inp)
         else:raise ValueError('Unmapped graph input: '+name)
     if set(k for _,k,_ in bindings)!=set(model.state_dict()):
-        raise ValueError('Template did not expose every trainable weight')
+        raise ValueError('Template omitted weights: '+str(set(model.state_dict())-set(k for _,k,_ in bindings)))
     del graph.graph.input[:];graph.graph.input.extend(keep)
     onnx.helper.set_model_props(graph,{'musab_format':'musab-v12-pt-v1'})
     onnx.checker.check_model(graph);onnx.save(graph,str(path))

@@ -17,13 +17,13 @@ public final class MathEngine implements AutoCloseable {
     private String description="ONNX";
     public String description(){return description;}
     public MathEngine(File checkpoint, byte[] template, InputStream manifest, Progress progress) throws Exception {
-        try {
+        try (InputStream manifestInput=manifest) {
             try(OrtSession.SessionOptions opts=new OrtSession.SessionOptions()) {
                 opts.setIntraOpNumThreads(2);opts.setInterOpNumThreads(1);
                 session=env.createSession(template,opts);
             }
             Map<String,String[]> entries=new LinkedHashMap<>();
-            try(BufferedReader reader=new BufferedReader(new InputStreamReader(manifest,StandardCharsets.UTF_8))) {
+            try(BufferedReader reader=new BufferedReader(new InputStreamReader(manifestInput,StandardCharsets.UTF_8))) {
                 String line;while((line=reader.readLine())!=null){String[] parts=line.split("\\t");if(parts.length!=3)throw new IOException("قالب أوزان غير صالح");entries.put(parts[1],parts);}
             }
             try(PtCheckpoint pt=new PtCheckpoint(checkpoint)) {
@@ -39,7 +39,7 @@ public final class MathEngine implements AutoCloseable {
             Set<String> expected=new HashSet<>(parameters.keySet());expected.add("input_ids");
             if(!session.getInputNames().equals(expected))throw new IOException("مدخلات القالب غير متوافقة");
             next(Tokenizer.prompt("1+1"));
-        }catch(Exception e){try{close();}catch(Exception ignored){}throw e;}
+        }catch(Exception|OutOfMemoryError e){try{close();}catch(Exception ignored){}throw e;}
     }
     public MathEngine(File model) throws Exception {
         OrtSession candidate;

@@ -29,6 +29,12 @@ public final class PtIntegration {
             if(!rejected)throw new AssertionError("must reject "+name);checks++;
         }
         if(PtCheckpoint.half(1)!=Math.scalb(1f,-24)||PtCheckpoint.half(0x3c00)!=1f||PtCheckpoint.half(0xc000)!=-2f)throw new AssertionError("half conversion");
+        try(MathEngine full=open(root.resolve("full"),"best.pt")) {
+            long[] ids=new long[23];ids[0]=1;for(int i=1;i<23;i++)ids[i]=3+((i-1)*17)%256;
+            float[] actual=full.logits(ids);List<String> ref=Files.readAllLines(root.resolve("full/reference.txt"));
+            for(int i=0;i<actual.length;i++){float expected=Float.parseFloat(ref.get(i));if(Math.abs(actual[i]-expected)>2e-4+2e-3*Math.abs(expected))throw new AssertionError("Production logits mismatch "+i);}
+            checks++;
+        }
         System.out.println("DIRECT_PT_IMPORT_PARITY_PASS checks="+(checks+1));
     }
 }
