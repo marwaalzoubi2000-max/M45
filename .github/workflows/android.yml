@@ -20,6 +20,12 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - run: pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
+      - run: pip install onnx==1.17.0 onnxruntime==1.22.0 'numpy<3'
+      - run: python tools/build_pt_template.py
       - run: gradle --no-daemon testDebugUnitTest lintDebug assembleDebug
       - uses: actions/upload-artifact@v4
         with:
@@ -36,4 +42,15 @@ jobs:
           python-version: '3.11'
       - run: pip install torch==2.10.0 --index-url https://download.pytorch.org/whl/cpu
       - run: pip install onnx==1.17.0 onnxruntime==1.22.0 'numpy<3'
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
       - run: python tools/test_export.py
+      - run: python tools/test_pt_import.py
+      - name: Check Java direct PT import against PyTorch
+        run: |
+          curl --fail --location --retry 3 https://repo.maven.apache.org/maven2/com/microsoft/onnxruntime/onnxruntime/1.22.0/onnxruntime-1.22.0.jar -o build/ort.jar
+          mkdir -p build/java-test
+          javac -cp build/ort.jar -d build/java-test app/src/main/java/com/musab/math/Tokenizer.java app/src/main/java/com/musab/math/PtCheckpoint.java app/src/main/java/com/musab/math/MathEngine.java tests/PtIntegration.java
+          java -Xmx1g -cp build/java-test:build/ort.jar com.musab.math.PtIntegration build/pt-fixtures
